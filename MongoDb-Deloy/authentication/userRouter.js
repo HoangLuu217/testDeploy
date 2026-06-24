@@ -53,17 +53,30 @@ userRouter.post(
 
 // Signup endpoint
 userRouter.post('/signup', (req, res, next) => {
+    console.log("Signup endpoint called. req.body:", req.body);
     let callbackCalled = false;
     const handleSignup = (err, user) => {
-        if (callbackCalled) return;
+        if (callbackCalled) {
+            console.log("handleSignup: already called once, skipping.");
+            return;
+        }
         callbackCalled = true;
 
         if (err) {
+            console.error("handleSignup error:", err);
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json');
             return res.json({ err: err });
         } else {
-            passport.authenticate('local', { session: false })(req, res, () => {
+            console.log("handleSignup success. User created:", user.username);
+            console.log("Attempting to authenticate user locally with passport...");
+            passport.authenticate('local', { session: false })(req, res, (authErr) => {
+                if (authErr) {
+                    console.error("Passport local auth inside signup callback failed with error:", authErr);
+                    res.statusCode = 500;
+                    return res.json({ success: false, message: authErr.message });
+                }
+                console.log("Passport local auth inside signup callback succeeded!");
                 res.statusCode = 200;
                 res.setHeader('Content-Type', 'application/json');
                 res.json({
@@ -82,11 +95,15 @@ userRouter.post('/signup', (req, res, next) => {
         );
 
         if (result && typeof result.then === 'function') {
+            console.log("User.register returned a promise, setting up handlers.");
             result
                 .then(user => handleSignup(null, user))
                 .catch(err => handleSignup(err));
+        } else {
+            console.log("User.register did not return a promise.");
         }
     } catch (err) {
+        console.error("Catch block in signup caught error:", err);
         handleSignup(err);
     }
 });

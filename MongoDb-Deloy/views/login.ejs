@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication - Article Space</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        // Redirect immediately if user is already logged in
+        if (localStorage.getItem('token')) {
+            window.location.href = '/';
+        }
+    </script>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card glass-panel">
+            <div class="auth-header">
+                <a href="#" class="nav-brand" style="font-size: 2.2rem; display: block; margin-bottom: 0.5rem;">
+                    <i class="fa-solid fa-feather-pointed"></i> ArticleSpace
+                </a>
+                <p class="auth-subtitle" id="auth-subtitle-text">Sign in to read, create, and discuss articles</p>
+            </div>
+
+            <!-- Login Form -->
+            <form id="login-form">
+                <div class="form-group">
+                    <label class="form-label" for="login-username">Username</label>
+                    <div style="position: relative;">
+                        <span style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">
+                            <i class="fa-regular fa-user"></i>
+                        </span>
+                        <input type="text" id="login-username" class="form-control" style="padding-left: 2.5rem;" placeholder="Enter your username" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="login-password">Password</label>
+                    <div style="position: relative;">
+                        <span style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">
+                            <i class="fa-solid fa-lock"></i>
+                        </span>
+                        <input type="password" id="login-password" class="form-control" style="padding-left: 2.5rem;" placeholder="Enter your password" required>
+                    </div>
+                </div>
+                <button type="submit" class="auth-btn">
+                    Sign In <i class="fa-solid fa-arrow-right-to-bracket" style="margin-left: 0.5rem;"></i>
+                </button>
+                <div class="auth-switch">
+                    Don't have an account? <a href="#" id="to-signup">Sign up now</a>
+                </div>
+            </form>
+
+            <!-- Signup Form (hidden by default) -->
+            <form id="signup-form" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label" for="signup-username">Username</label>
+                    <div style="position: relative;">
+                        <span style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">
+                            <i class="fa-regular fa-user"></i>
+                        </span>
+                        <input type="text" id="signup-username" class="form-control" style="padding-left: 2.5rem;" placeholder="Choose a username" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="signup-password">Password</label>
+                    <div style="position: relative;">
+                        <span style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">
+                            <i class="fa-solid fa-lock"></i>
+                        </span>
+                        <input type="password" id="signup-password" class="form-control" style="padding-left: 2.5rem;" placeholder="Choose a strong password" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="signup-confirm-password">Confirm Password</label>
+                    <div style="position: relative;">
+                        <span style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">
+                            <i class="fa-solid fa-circle-check"></i>
+                        </span>
+                        <input type="password" id="signup-confirm-password" class="form-control" style="padding-left: 2.5rem;" placeholder="Confirm your password" required>
+                    </div>
+                </div>
+                <button type="submit" class="auth-btn">
+                    Create Account <i class="fa-solid fa-user-plus" style="margin-left: 0.5rem;"></i>
+                </button>
+                <div class="auth-switch">
+                    Already have an account? <a href="#" id="to-login">Sign in here</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script>
+        const loginForm = document.getElementById('login-form');
+        const signupForm = document.getElementById('signup-form');
+        const authSubtitleText = document.getElementById('auth-subtitle-text');
+        
+        // Navigation toggle
+        document.getElementById('to-signup').addEventListener('click', (e) => {
+            e.preventDefault();
+            loginForm.style.display = 'none';
+            signupForm.style.display = 'block';
+            authSubtitleText.textContent = 'Create an account to join the discussion';
+        });
+
+        document.getElementById('to-login').addEventListener('click', (e) => {
+            e.preventDefault();
+            signupForm.style.display = 'none';
+            loginForm.style.display = 'block';
+            authSubtitleText.textContent = 'Sign in to read, create, and discuss articles';
+        });
+
+        // Toast Helper
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            
+            let icon = 'fa-circle-check';
+            if (type === 'error') icon = 'fa-circle-exclamation';
+            if (type === 'info') icon = 'fa-circle-info';
+
+            toast.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <i class="fa-solid ${icon}"></i>
+                    <span>${message}</span>
+                </div>
+                <button class="toast-close">&times;</button>
+            `;
+            
+            container.appendChild(toast);
+
+            const closeBtn = toast.querySelector('.toast-close');
+            closeBtn.addEventListener('click', () => toast.remove());
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Login Handler
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const response = await fetch('/users/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    showToast('Login successful! Redirecting...', 'success');
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('username', username);
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 1000);
+                } else {
+                    showToast(data.message || 'Login failed. Please check credentials.', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Network error, please try again.', 'error');
+            }
+        });
+
+        // Signup Handler
+        signupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('signup-username').value;
+            const password = document.getElementById('signup-password').value;
+            const confirmPassword = document.getElementById('signup-confirm-password').value;
+
+            if (password !== confirmPassword) {
+                showToast('Passwords do not match.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/users/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    showToast('Registration successful! Please login.', 'success');
+                    signupForm.reset();
+                    // Switch back to login form
+                    signupForm.style.display = 'none';
+                    loginForm.style.display = 'block';
+                    document.getElementById('login-username').value = username;
+                    authSubtitleText.textContent = 'Sign in to read, create, and discuss articles';
+                } else {
+                    const errMsg = (data.err && data.err.message) || data.message || 'Registration failed.';
+                    showToast(errMsg, 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Network error, please try again.', 'error');
+            }
+        });
+    </script>
+</body>
+</html>

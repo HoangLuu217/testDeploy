@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Article Space</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        // Check authentication immediately
+        if (!localStorage.getItem('token')) {
+            window.location.href = '/login';
+        }
+    </script>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar glass-panel" style="border-radius: 0; border-top: none; border-left: none; border-right: none;">
+        <a href="/" class="nav-brand">
+            <i class="fa-solid fa-feather-pointed"></i> ArticleSpace
+        </a>
+        <div class="user-controls">
+            <div class="user-tag">
+                Welcome, <span id="username-display">User</span>
+            </div>
+            <button class="btn btn-outline" id="logout-btn">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <div>
+                <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem;">Article Feed</h1>
+                <p style="color: var(--text-secondary); font-size: 0.95rem;">Explore, create, and share thoughts with others</p>
+            </div>
+            <div style="display: flex; gap: 1rem; width: 100%; max-width: 600px; justify-content: flex-end; align-items: center;">
+                <div class="search-bar">
+                    <span class="search-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <input type="text" id="search-input" class="search-input" placeholder="Search by title or author...">
+                </div>
+                <button class="btn btn-primary" id="new-article-btn">
+                    <i class="fa-solid fa-plus"></i> Write Article
+                </button>
+            </div>
+        </div>
+
+        <!-- Articles Grid -->
+        <div class="articles-grid" id="articles-grid">
+            <!-- Loading Skeleton or empty state initially -->
+            <div class="empty-state">
+                <div class="empty-icon"><i class="fa-solid fa-circle-notch fa-spin"></i></div>
+                <div class="empty-title">Loading articles...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Article Create/Edit Modal -->
+    <div class="modal-backdrop" id="article-modal">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-title">Write New Article</h3>
+                <button class="modal-close" id="close-article-modal">&times;</button>
+            </div>
+            <form id="article-form">
+                <input type="hidden" id="article-id">
+                <div class="form-group">
+                    <label class="form-label" for="article-title">Title</label>
+                    <input type="text" id="article-title" class="form-control" placeholder="Enter a catchy title" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="article-content">Content</label>
+                    <textarea id="article-content" class="form-control textarea-control" placeholder="Tell your story..." required></textarea>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" id="cancel-article-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="save-article-btn">Publish Article</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Article Detail Modal -->
+    <div class="modal-backdrop" id="detail-modal">
+        <div class="modal-content glass-panel" style="max-width: 750px;">
+            <div class="modal-header">
+                <button class="modal-close" id="close-detail-modal" style="margin-left: auto;">&times;</button>
+            </div>
+            <div id="detail-content">
+                <!-- Rendered dynamically -->
+            </div>
+            
+            <!-- Comments Section -->
+            <div class="comments-section">
+                <h4 class="comments-title">
+                    <i class="fa-regular fa-comments"></i> Discussion (<span id="detail-comments-count">0</span>)
+                </h4>
+                <div class="comments-list" id="detail-comments-list">
+                    <!-- Rendered dynamically -->
+                </div>
+                <form id="comment-form" class="comment-form">
+                    <input type="text" id="comment-body" class="comment-input" placeholder="Join the discussion... write a comment" required>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa-regular fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script>
+        // Set username display
+        document.getElementById('username-display').textContent = localStorage.getItem('username') || 'User';
+
+        let allArticles = [];
+
+        // Toast Helper
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            
+            let icon = 'fa-circle-check';
+            if (type === 'error') icon = 'fa-circle-exclamation';
+            if (type === 'info') icon = 'fa-circle-info';
+
+            toast.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <i class="fa-solid ${icon}"></i>
+                    <span>${message}</span>
+                </div>
+                <button class="toast-close">&times;</button>
+            `;
+            
+            container.appendChild(toast);
+
+            const closeBtn = toast.querySelector('.toast-close');
+            closeBtn.addEventListener('click', () => toast.remove());
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Fetch articles
+        async function fetchArticles() {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch('/articles', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.status === 401) {
+                    // Unauthorized - token expired or invalid
+                    showToast('Session expired. Redirecting to login...', 'error');
+                    localStorage.clear();
+                    setTimeout(() => window.location.href = '/login', 1500);
+                    return;
+                }
+
+                if (response.ok) {
+                    allArticles = await response.json();
+                    renderArticles(allArticles);
+                } else {
+                    showToast('Failed to fetch articles.', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Error connecting to the server.', 'error');
+            }
+        }
+
+        // Render articles
+        function renderArticles(articlesList) {
+            const grid = document.getElementById('articles-grid');
+            grid.innerHTML = '';
+
+            if (articlesList.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon"><i class="fa-regular fa-newspaper"></i></div>
+                        <div class="empty-title">No articles found</div>
+                        <div class="empty-description">Be the first to publish an article!</div>
+                    </div>
+                `;
+                return;
+            }
+
+            articlesList.forEach(article => {
+                const card = document.createElement('div');
+                card.className = 'article-card glass-panel';
+                
+                const dateStr = new Date(article.date).toLocaleDateString(undefined, {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+
+                const commentsCount = article.comments ? article.comments.length : 0;
+                const author = article.author || 'Anonymous';
+                const excerpt = article.content || '';
+
+                card.innerHTML = `
+                    <div class="article-meta">
+                        <span class="article-author"><i class="fa-regular fa-user"></i> ${escapeHTML(author)}</span>
+                        <span class="article-date">${dateStr}</span>
+                    </div>
+                    <h3 class="article-title">${escapeHTML(article.title)}</h3>
+                    <p class="article-excerpt">${escapeHTML(excerpt)}</p>
+                    <div class="article-card-footer">
+                        <span class="comment-count" style="cursor: pointer;" onclick="openDetailModal('${article._id}')">
+                            <i class="fa-regular fa-comment"></i> ${commentsCount} ${commentsCount === 1 ? 'comment' : 'comments'}
+                        </span>
+                        <div class="card-actions">
+                            <button class="btn btn-outline btn-sm" onclick="openEditModal('${article._id}')">
+                                <i class="fa-regular fa-edit"></i>
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteArticle('${article._id}')">
+                                <i class="fa-regular fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                // Allow clicking card content (excluding buttons and link tags) to view full detail
+                card.addEventListener('click', (e) => {
+                    if (!e.target.closest('.card-actions') && !e.target.closest('.comment-count')) {
+                        openDetailModal(article._id);
+                    }
+                });
+
+                grid.appendChild(card);
+            });
+        }
+
+        // HTML Escape Helper
+        function escapeHTML(str) {
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Search and filter
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            const filtered = allArticles.filter(art => 
+                art.title.toLowerCase().includes(query) || 
+                (art.author && art.author.toLowerCase().includes(query)) ||
+                (art.content && art.content.toLowerCase().includes(query))
+            );
+            renderArticles(filtered);
+        });
+
+        // Modals management
+        const articleModal = document.getElementById('article-modal');
+        const detailModal = document.getElementById('detail-modal');
+
+        function openModal(modal) {
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(modal) {
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        document.getElementById('new-article-btn').addEventListener('click', () => {
+            document.getElementById('article-form').reset();
+            document.getElementById('article-id').value = '';
+            document.getElementById('modal-title').textContent = 'Write New Article';
+            document.getElementById('save-article-btn').textContent = 'Publish Article';
+            openModal(articleModal);
+        });
+
+        document.getElementById('close-article-modal').addEventListener('click', () => closeModal(articleModal));
+        document.getElementById('cancel-article-modal').addEventListener('click', () => closeModal(articleModal));
+        document.getElementById('close-detail-modal').addEventListener('click', () => closeModal(detailModal));
+
+        // Close on clicking backdrop
+        window.addEventListener('click', (e) => {
+            if (e.target === articleModal) closeModal(articleModal);
+            if (e.target === detailModal) closeModal(detailModal);
+        });
+
+        // Open edit modal
+        function openEditModal(id) {
+            const article = allArticles.find(art => art._id === id);
+            if (!article) return;
+
+            document.getElementById('article-id').value = article._id;
+            document.getElementById('article-title').value = article.title;
+            document.getElementById('article-content').value = article.content || '';
+            document.getElementById('modal-title').textContent = 'Edit Article';
+            document.getElementById('save-article-btn').textContent = 'Save Changes';
+            openModal(articleModal);
+        }
+
+        // Save article (Create / Update)
+        document.getElementById('article-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('article-id').value;
+            const title = document.getElementById('article-title').value;
+            const content = document.getElementById('article-content').value;
+            const author = localStorage.getItem('username') || 'Anonymous';
+
+            const token = localStorage.getItem('token');
+            const url = id ? `/articles/${id}` : '/articles';
+            const method = id ? 'PUT' : 'POST';
+
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ title, content, author })
+                });
+
+                if (response.ok) {
+                    showToast(id ? 'Article updated successfully!' : 'Article published successfully!', 'success');
+                    closeModal(articleModal);
+                    fetchArticles();
+                } else {
+                    const data = await response.json();
+                    showToast(data.message || 'Failed to save article.', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Network error, please try again.', 'error');
+            }
+        });
+
+        // Delete article
+        async function deleteArticle(id) {
+            if (!confirm('Are you sure you want to delete this article?')) return;
+
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(`/articles/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.status === 204 || response.ok) {
+                    showToast('Article deleted successfully!', 'success');
+                    fetchArticles();
+                } else {
+                    showToast('Failed to delete article.', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Network error, please try again.', 'error');
+            }
+        }
+
+        // Detail Modal and Comments Management
+        let currentDetailArticle = null;
+
+        async function openDetailModal(id) {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(`/articles/${id}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    currentDetailArticle = await response.json();
+                    renderDetailModal();
+                    openModal(detailModal);
+                } else {
+                    showToast('Failed to load article details.', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Network error.', 'error');
+            }
+        }
+
+        function renderDetailModal() {
+            if (!currentDetailArticle) return;
+
+            const container = document.getElementById('detail-content');
+            const dateStr = new Date(currentDetailArticle.date).toLocaleDateString(undefined, {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            container.innerHTML = `
+                <div class="article-meta" style="margin-bottom: 1rem;">
+                    <span class="article-author" style="font-size: 0.9rem;">
+                        <i class="fa-regular fa-user"></i> Published by <strong>${escapeHTML(currentDetailArticle.author || 'Anonymous')}</strong>
+                    </span>
+                    <span class="article-date" style="font-size: 0.9rem;">${dateStr}</span>
+                </div>
+                <h2 style="font-size: 1.75rem; font-weight: 700; line-height: 1.3; margin-bottom: 1rem; color: var(--text-primary);">
+                    ${escapeHTML(currentDetailArticle.title)}
+                </h2>
+                <div style="font-size: 1rem; line-height: 1.6; color: #334155; white-space: pre-wrap; margin-bottom: 1.5rem;">
+                    ${escapeHTML(currentDetailArticle.content || '')}
+                </div>
+            `;
+
+            // Render comments
+            const commentsCount = currentDetailArticle.comments ? currentDetailArticle.comments.length : 0;
+            document.getElementById('detail-comments-count').textContent = commentsCount;
+
+            const commentsList = document.getElementById('detail-comments-list');
+            commentsList.innerHTML = '';
+
+            if (commentsCount === 0) {
+                commentsList.innerHTML = `
+                    <div style="text-align: center; color: var(--text-secondary); padding: 1.5rem 0; font-size: 0.95rem;">
+                        No comments yet. Start the conversation!
+                    </div>
+                `;
+            } else {
+                // Sort comments by date descending or ascending? Let's sort by date ascending (oldest first)
+                const sortedComments = [...currentDetailArticle.comments].sort((a, b) => new Date(a.date) - new Date(b.date));
+                
+                sortedComments.forEach(comment => {
+                    const item = document.createElement('div');
+                    item.className = 'comment-item';
+                    
+                    const commentDate = new Date(comment.date).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+
+                    item.innerHTML = `
+                        <div class="comment-meta">
+                            <span class="commenter-name">${escapeHTML(comment.commenter || 'Anonymous')}</span>
+                            <span>${commentDate}</span>
+                        </div>
+                        <div class="comment-body">${escapeHTML(comment.body)}</div>
+                    `;
+                    commentsList.appendChild(item);
+                });
+                
+                // Scroll comments to bottom
+                commentsList.scrollTop = commentsList.scrollHeight;
+            }
+        }
+
+        // Add Comment Handler
+        document.getElementById('comment-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentDetailArticle) return;
+
+            const bodyInput = document.getElementById('comment-body');
+            const body = bodyInput.value.trim();
+            if (!body) return;
+
+            const commenter = localStorage.getItem('username') || 'Anonymous';
+            const token = localStorage.getItem('token');
+
+            // Copy comments array and push new comment
+            const updatedComments = [...(currentDetailArticle.comments || [])];
+            updatedComments.push({ commenter, body });
+
+            try {
+                // Update article comments using PUT article endpoint
+                const response = await fetch(`/articles/${currentDetailArticle._id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ 
+                        title: currentDetailArticle.title,
+                        content: currentDetailArticle.content,
+                        author: currentDetailArticle.author,
+                        comments: updatedComments
+                    })
+                });
+
+                if (response.ok) {
+                    bodyInput.value = '';
+                    currentDetailArticle = await response.json();
+                    renderDetailModal();
+                    
+                    // Update main articles feed data source
+                    const index = allArticles.findIndex(art => art._id === currentDetailArticle._id);
+                    if (index !== -1) {
+                        allArticles[index] = currentDetailArticle;
+                        renderArticles(allArticles);
+                    }
+                    
+                    showToast('Comment added!', 'success');
+                } else {
+                    showToast('Failed to add comment.', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Network error, please try again.', 'error');
+            }
+        });
+
+        // Logout
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            localStorage.clear();
+            showToast('Logged out successfully.', 'info');
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 1000);
+        });
+
+        // Load data on start
+        fetchArticles();
+    </script>
+</body>
+</html>
